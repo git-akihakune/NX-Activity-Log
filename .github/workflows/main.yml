@@ -1,15 +1,46 @@
 name: Release
 
 on:
-  issue_comment:
-    types: [ created ]
+  push:
+    branches: [ master ]
+    paths:
+      - Application/Makefile
 
 jobs:
+  check_version:
+    name: Check for version bump
+    runs-on: ubuntu-latest
+    outputs:
+      bumped: ${{ steps.check.outputs.bumped }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Compare version before and after push
+        id: check
+        run: |
+          VER_FILE=Application/Makefile
+          NEW=$(grep -E '^VER_(MAJOR|MINOR|MICRO)\s' "$VER_FILE")
+          if git cat-file -e "${{ github.event.before }}:$VER_FILE" 2>/dev/null; then
+            OLD=$(git show "${{ github.event.before }}:$VER_FILE" | grep -E '^VER_(MAJOR|MINOR|MICRO)\s')
+          else
+            OLD=""
+          fi
+          if [ "$OLD" != "$NEW" ]; then
+            echo "bumped=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "bumped=false" >> "${GITHUB_OUTPUT}"
+          fi
+        shell: bash
+
   build_and_release:
     name: Build and release
+    needs: check_version
     runs-on: ubuntu-latest
     container: devkitpro/devkita64:latest
-    if: contains(github.event.comment.body, '/release-action')
+    if: needs.check_version.outputs.bumped == 'true'
 
     steps:
       - name: Update latest libnx
@@ -22,7 +53,6 @@ jobs:
       - name: Checkout latest code
         uses: actions/checkout@v5
         with:
-          ref: master
           clean: true
           fetch-depth: 0
           fetch-tags: true
@@ -31,8 +61,8 @@ jobs:
         run: |
           VER_FILE=Application/Makefile
           VERSION=$(awk '/^VER_MAJOR/{print $3}' $VER_FILE).$(awk '/^VER_MINOR/{print $3}' $VER_FILE).$(awk '/^VER_MICRO/{print $3}' $VER_FILE)
-          echo "TAG=v${VERSION}" > "${GITHUB_ENV}"
-          echo "RELEASE_NAME=NX-Activity-Log v${VERSION}" >> "${GITHUB_ENV}"
+          echo "TAG=v${VERSION}-delta" > "${GITHUB_ENV}"
+          echo "RELEASE_NAME=NX-Activity-Log v${VERSION}-delta" >> "${GITHUB_ENV}"
         shell: bash
       - name: Build
         run: |
