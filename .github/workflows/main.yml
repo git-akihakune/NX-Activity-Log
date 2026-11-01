@@ -39,6 +39,8 @@ jobs:
   build_and_release:
     name: Build and release
     needs: check_version
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     container: devkitpro/devkita64:latest
     if: github.event_name == 'workflow_dispatch' || needs.check_version.outputs.bumped == 'true'
